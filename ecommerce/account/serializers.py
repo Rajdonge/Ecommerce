@@ -36,3 +36,9 @@ class VerifyEmailSerializer(serializers.Serializer):
 # Resend Verify Email OTP Serializer
 class ResendOtpToVerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
+
+
+# User Login Serializer
+class UserLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
