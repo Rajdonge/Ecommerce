@@ -22,6 +22,25 @@ class MyUserManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
         return user
+    
+    def create_staffuser(self, full_name, date_of_birth, gender, email, mobile, address, password=None, password2=None):
+        """
+        Creates and saves a staff user with the given email, date of
+        birth and password.
+        """
+        user = self.create_user(
+            full_name=full_name,
+            date_of_birth=date_of_birth,
+            gender=gender,
+            email=email,
+            mobile=mobile,
+            address=address,
+            password=password,
+        )
+        user.is_staff = True
+        user.save(using=self._db)
+        return user
+
 
     def create_superuser(self, full_name, date_of_birth, gender, email, mobile, address, password=None):
         """
@@ -38,6 +57,7 @@ class MyUserManager(BaseUserManager):
             password=password,
         )
         user.is_admin = True
+        user.is_staff = True
         user.save(using=self._db)
         return user
 
@@ -56,6 +76,7 @@ class MyUser(AbstractBaseUser):
     address = models.CharField(max_length=20)
     password = models.CharField(max_length=20)
     is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
     is_admin = models.BooleanField(default=False)
     is_created_at = models.DateTimeField(auto_now_add=True)
     is_verified = models.BooleanField(default=False)
@@ -71,17 +92,10 @@ class MyUser(AbstractBaseUser):
         return self.email
 
     def has_perm(self, perm, obj=None):
-        "Does the user have a specific permission?"
+        "Grant all permission to admins?"
         # Simplest possible answer: Yes, always
-        return True
-
+        return self.is_admin 
     def has_module_perms(self, app_label):
         "Does the user have permissions to view the app `app_label`?"
         # Simplest possible answer: Yes, always
-        return True
-
-    @property
-    def is_staff(self):
-        "Is the user a member of staff?"
-        # Simplest possible answer: All admins are staff
-        return self.is_admin
+        return self.is_admin 

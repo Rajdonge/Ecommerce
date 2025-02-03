@@ -66,3 +66,5 @@ class ResendOtpToVerifyEmailView(APIView):
             output_error = {'message': 'Internal server error', 'error':serializer.errors}
             return Response(output_error, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+
+        
