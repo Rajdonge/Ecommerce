@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from .models import MyUser
-from .serializers import AccountSerializer, ResendOtpToVerifyEmailSerializer, UserLoginSerializer, VerifyEmailSerializer
+from .serializers import AccountSerializer, ResendOtpToVerifyEmailSerializer, UserLoginSerializer, UserLogoutSerializer, UserUpdatePasswordSerializer, UserUpdatePasswordByAdminSerializer, SendOtpToResetPasswordSerializer, ResetPasswordSerializer, VerifyEmailSerializer
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -10,8 +10,24 @@ from .SendOtpToVerifyEmail import *
 # User Login imports
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import update_last_login
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 
+# Reset Password imports
+from .SendOtpToResetPassword import *
+
+# Update Password by Admin imports
+from rest_framework.permissions import IsAdminUser
+
+# User Profile imports
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from django.contrib.auth import get_user_model
+
+# User Profile View by admin
+from django.http import Http404
+
+
+# User Registration View
 class AccountView(APIView):
     def post(self, request):
         users_data = request.data
@@ -102,3 +118,131 @@ class UserLoginView(APIView):
         except Exception as e:
             print('Internal server error', e)
             return Response({'message': 'Internal server error', 'error': serializer.errors}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+# User Logout View
+class UserLogoutView(APIView):
+    serializer_class = UserLogoutSerializer
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+    
+# Update Password View
+class UserUpdatePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        user = request.user
+        data = request.data
+        serializer = UserUpdatePasswordSerializer(data=data, context={'user': user})
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            return Response({'message': 'Password updated successfully'}, status=status.HTTP_200_OK)    
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# Update User Password by Admin View
+class UserUpdatePasswordByAdminView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    def post(self, request, id):
+        user = get_object_or_404(get_user_model(), id=id)
+        data = request.data
+        serializer = UserUpdatePasswordByAdminSerializer(data=data, context={'user': user})
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            return Response({'message': 'Password updated successfully'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+# Send OTP to Reset Password View
+class SendOtpToResetPasswordView(APIView):
+    def post(self, request):
+        data = request.data
+        serializer = SendOtpToResetPasswordSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data.get('email').lower().strip()
+        Send_Otp_To_Reset_Password(email)
+        return Response({'message': 'OTP sent successfully'}, status=status.HTTP_200_OK)
+    
+# Reset Password View
+class ResetPasswordView(APIView):
+    def post(self, request):
+        data = request.data
+        serializer = ResetPasswordSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'message': 'Password reset successfully.'}, status=status.HTTP_200_OK)
+
+
+# User Profile View by Admin
+class UserProfileViewByAdmin(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    def get(self, request, id):
+        try:
+            user = get_object_or_404(get_user_model(), id=id)
+            serializer = AccountSerializer(user)
+            response_data = {
+                'data': serializer.data,
+                'message': f'User profile of {user.id} fetched successfully'
+        }
+            return Response(response_data, status=status.HTTP_200_OK)
+        except Http404:
+            return Response(
+                {'error': 'User not found. Please check the ID and try again.'},
+                status=status.HTTP_404_NOT_FOUND
+                )
+            
+    
+    def patch(self, request, id):
+        user = get_object_or_404(get_user_model(), id=id)
+        serializer = AccountSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            response_data = {
+                'data': serializer.data,
+                'message': f'User profile of {user.id} updated successfully'
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, id):
+        user = get_object_or_404(get_user_model(), id=id)
+        user.delete()
+        return Response({'message': f'User id deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    
+# User Profile View
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, id=None):
+        # Ensure the user can only fetch their own profile
+        id = request.user.id
+        if id != id:
+            return Response({'message': 'You are not authorized to view this profile'}, status=status.HTTP_401_UNAUTHORIZED)
+        serializer = AccountSerializer(request.user)
+        response_data = {
+            "data": serializer.data,
+            "message": f"User profile of {request.user.id} fetched successfully"
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+    def patch(self, request, id=None):
+        # Ensure the user can only update their own profile
+        id = request.user.id
+        if id != id:
+            return Response({'message': 'You are not authorized to update this profile'}, status=status.HTTP_401_UNAUTHORIZED)
+        serializer = AccountSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid(raise_exception=True):
+            serializer.save()
+            response_data = {
+                "data": serializer.data,
+                "message": f"User profile of {request.user.id} updated successfully"
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, id=None):
+        # Ensure the user can only delete their own profile
+        id = request.user.id
+        if id != id:
+            return Response({'message': 'You are not authorized to delete this profile'}, status=status.HTTP_401_UNAUTHORIZED)
+        request.user.delete()
+        return Response({'message': f'User id deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
